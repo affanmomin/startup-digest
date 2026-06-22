@@ -96,14 +96,18 @@ export async function sendDigestEmail(
   digest: WeeklyDigest
 ): Promise<{ sent: boolean; id?: string; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.DIGEST_EMAIL_TO;
+  // DIGEST_EMAIL_TO may be a single address or a comma-separated list.
+  const to = (process.env.DIGEST_EMAIL_TO ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const from =
     process.env.DIGEST_EMAIL_FROM || "Startup Digest <onboarding@resend.dev>";
 
   if (!apiKey) {
     return { sent: false, error: "RESEND_API_KEY is not configured." };
   }
-  if (!to) {
+  if (to.length === 0) {
     return { sent: false, error: "DIGEST_EMAIL_TO is not configured." };
   }
 
