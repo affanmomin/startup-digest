@@ -31,7 +31,7 @@ export default async function HomePage() {
   const [building, products] = await Promise.all([
     prisma.product.findMany({
       where: { status: "BUILDING" },
-      include: { analysis: true, buildPlan: true },
+      include: { analysis: true, buildPlan: true, artifacts: true },
       orderBy: { updatedAt: "desc" },
     }) as Promise<ProductFull[]>,
     // Discover: analyzed, not passed, ranked by opportunity (don't hide borderline).

@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AnalyzeButton } from "@/components/analyze-button";
 import { BuildPlanSection } from "@/components/build-plan-section";
+import { BuildKit } from "@/components/build-kit";
 import { StatusControl } from "@/components/status-control";
+import { FavoriteButton } from "@/components/favorite-button";
 import { OpportunityBadge } from "@/components/opportunity-badge";
 import {
   CloneScoreBadge,
@@ -20,6 +22,9 @@ import { asStringArray } from "@/lib/utils";
 import type { ProductFull } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+// "Generate full kit" runs up to 4 OpenRouter calls from a server action invoked
+// by this page, so give the segment a generous budget (Pro plan honors 300s).
+export const maxDuration = 60;
 
 function Section({
   title,
@@ -61,7 +66,7 @@ export default async function ProductDetailPage({
 
   const product = (await prisma.product.findUnique({
     where: { id },
-    include: { analysis: true, buildPlan: true },
+    include: { analysis: true, buildPlan: true, artifacts: true },
   })) as ProductFull | null;
 
   if (!product) notFound();
@@ -72,6 +77,11 @@ export default async function ProductDetailPage({
   return (
     <>
       <Header title={product.name} description={product.tagline}>
+        <FavoriteButton
+          productId={product.id}
+          favorite={product.favorite}
+          size={20}
+        />
         <AnalyzeButton productId={product.id} hasAnalysis={!!a} />
       </Header>
 
@@ -159,6 +169,18 @@ export default async function ProductDetailPage({
         {/* Build plan — the action step */}
         {a ? (
           <BuildPlanSection productId={product.id} plan={product.buildPlan} />
+        ) : null}
+
+        {/* Build Kit — gap analysis, future scope, PRD, Claude Code handoff */}
+        {a ? (
+          <BuildKit
+            productId={product.id}
+            productName={product.name}
+            artifacts={product.artifacts.map((x) => ({
+              type: x.type,
+              content: x.content,
+            }))}
+          />
         ) : null}
 
         {/* Full analysis */}

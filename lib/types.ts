@@ -4,9 +4,17 @@ import type {
   WeeklyDigest,
   BuildPlan,
   FounderProfile,
+  ProductArtifact,
 } from "@prisma/client";
 
-export type { Product, ProductAnalysis, WeeklyDigest, BuildPlan, FounderProfile };
+export type {
+  Product,
+  ProductAnalysis,
+  WeeklyDigest,
+  BuildPlan,
+  FounderProfile,
+  ProductArtifact,
+};
 
 export type ProductWithAnalysis = Product & {
   analysis: ProductAnalysis | null;
@@ -15,6 +23,7 @@ export type ProductWithAnalysis = Product & {
 export type ProductFull = Product & {
   analysis: ProductAnalysis | null;
   buildPlan: BuildPlan | null;
+  artifacts: ProductArtifact[];
 };
 
 export type ProductStatus = "NEW" | "SAVED" | "BUILDING" | "PASSED";

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { WorthBuildingBadge } from "@/components/score-badge";
 import { OpportunityBadge } from "@/components/opportunity-badge";
 import { StatusBadge } from "@/components/status-control";
+import { FavoriteButton } from "@/components/favorite-button";
 import { cn } from "@/lib/utils";
 import { analyzeProductAction } from "@/app/actions";
 
@@ -33,6 +34,7 @@ export interface ProductRow {
   mvpTime: string | null;
   worthBuilding: boolean | null;
   status: string;
+  favorite: boolean;
   topics: string[];
   analyzed: boolean;
 }
@@ -61,6 +63,7 @@ export function ProductTable({ products }: { products: ProductRow[] }) {
   const [sort, setSort] = React.useState<SortKey>("opportunity");
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("ALL");
   const [worthOnly, setWorthOnly] = React.useState(false);
+  const [favOnly, setFavOnly] = React.useState(false);
   const [topic, setTopic] = React.useState<string>("ALL");
   const [analyzingId, setAnalyzingId] = React.useState<string | null>(null);
 
@@ -77,6 +80,7 @@ export function ProductTable({ products }: { products: ProductRow[] }) {
         return false;
       if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
       if (worthOnly && !p.worthBuilding) return false;
+      if (favOnly && !p.favorite) return false;
       if (topic !== "ALL" && !p.topics.includes(topic)) return false;
       return true;
     });
@@ -95,7 +99,7 @@ export function ProductTable({ products }: { products: ProductRow[] }) {
       }
     });
     return rows;
-  }, [products, query, sort, statusFilter, worthOnly, topic]);
+  }, [products, query, sort, statusFilter, worthOnly, favOnly, topic]);
 
   async function handleAnalyze(id: string) {
     setAnalyzingId(id);
@@ -165,6 +169,19 @@ export function ProductTable({ products }: { products: ProductRow[] }) {
           )}
         >
           Worth building only
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFavOnly((v) => !v)}
+          className={cn(
+            "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+            favOnly
+              ? "bg-amber-100 text-amber-800"
+              : "text-muted-foreground hover:bg-accent"
+          )}
+        >
+          ★ Favorites
         </button>
 
         {allTopics.length > 0 ? (
@@ -257,6 +274,7 @@ export function ProductTable({ products }: { products: ProductRow[] }) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <FavoriteButton productId={p.id} favorite={p.favorite} />
                       {!p.analyzed ? (
                         <Button
                           variant="ghost"

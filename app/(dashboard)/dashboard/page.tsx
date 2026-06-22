@@ -35,6 +35,7 @@ export default async function DashboardPage() {
     mvpTime: p.analysis?.mvpTime ?? null,
     worthBuilding: p.analysis?.worthBuilding ?? null,
     status: p.status,
+    favorite: p.favorite,
     topics: asStringArray(p.topics),
     analyzed: !!p.analysis,
   }));

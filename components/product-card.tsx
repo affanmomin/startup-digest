@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { CloneScoreBadge, DifficultyBadge } from "@/components/score-badge";
 import { OpportunityBadge } from "@/components/opportunity-badge";
 import { StatusControl } from "@/components/status-control";
+import { FavoriteButton } from "@/components/favorite-button";
 import type { ProductWithAnalysis } from "@/lib/types";
 
 export function ProductCard({ product }: { product: ProductWithAnalysis }) {
@@ -31,6 +32,7 @@ export function ProductCard({ product }: { product: ProductWithAnalysis }) {
               <ChevronUp className="h-3 w-3" />
               {product.upvotes}
             </Badge>
+            <FavoriteButton productId={product.id} favorite={product.favorite} />
           </div>
         </div>
         <p className="text-sm text-muted-foreground">{product.tagline}</p>

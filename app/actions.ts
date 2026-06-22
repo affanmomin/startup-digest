@@ -7,6 +7,11 @@ import { fetchLatestProducts, saveProducts } from "@/lib/producthunt";
 import { analyzeAndSaveProduct } from "@/lib/ai";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { generateAndSaveBuildPlan } from "@/lib/buildplan";
+import {
+  generateAndSaveArtifact,
+  ARTIFACT_TYPES,
+  isArtifactType,
+} from "@/lib/artifacts";
 import { generateWeeklyDigest } from "@/lib/digest";
 import { sendDigestEmail } from "@/lib/email";
 import { saveFounderProfile } from "@/lib/founder";
@@ -156,6 +161,76 @@ export async function toggleBuildPlanItemAction(
     return {
       ok: false,
       message: err instanceof Error ? err.message : "Could not update.",
+    };
+  }
+}
+
+/** Toggle a product's favorite flag. */
+export async function toggleFavoriteAction(
+  productId: string
+): Promise<ActionResult & { favorite?: boolean }> {
+  try {
+    const current = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { favorite: true },
+    });
+    if (!current) return { ok: false, message: "Product not found." };
+    const favorite = !current.favorite;
+    await prisma.product.update({ where: { id: productId }, data: { favorite } });
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, favorite, message: favorite ? "Favorited." : "Unfavorited." };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Could not update favorite.",
+    };
+  }
+}
+
+/** Generate (or regenerate) one Build Kit artifact for a product. */
+export async function generateArtifactAction(
+  productId: string,
+  type: string
+): Promise<ActionResult> {
+  if (!isArtifactType(type)) return { ok: false, message: "Unknown artifact type." };
+  try {
+    const content = await generateAndSaveArtifact(productId, type);
+    if (!content) {
+      return { ok: false, message: "Generation failed (check OPENROUTER_API_KEY / logs)." };
+    }
+    revalidatePath(`/products/${productId}`);
+    return { ok: true, message: "Generated." };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Generation failed.",
+    };
+  }
+}
+
+/** Generate the entire Build Kit (all artifact types) for a product. */
+export async function generateAllArtifactsAction(
+  productId: string
+): Promise<ActionResult> {
+  try {
+    const results = await mapWithConcurrency(
+      [...ARTIFACT_TYPES],
+      4,
+      (type) => generateAndSaveArtifact(productId, type)
+    );
+    const ok = results.filter(Boolean).length;
+    revalidatePath(`/products/${productId}`);
+    if (ok === 0) return { ok: false, message: "Could not generate the kit." };
+    return {
+      ok: true,
+      message: `Generated ${ok}/${ARTIFACT_TYPES.length} documents.`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Kit generation failed.",
     };
   }
 }

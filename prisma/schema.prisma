@@ -28,15 +28,34 @@ model Product {
   launchDate     DateTime
   // Founder triage state: NEW | SAVED | BUILDING | PASSED
   status         String   @default("NEW")
+  // Quick "I like this" flag, independent of the triage pipeline.
+  favorite       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   analysis  ProductAnalysis?
   buildPlan BuildPlan?
+  artifacts ProductArtifact[]
 
   @@index([launchDate])
   @@index([upvotes])
   @@index([status])
+  @@index([favorite])
+}
+
+// AI-generated "Build Kit" documents (markdown) for a product you want to build.
+// type ∈ GAP_ANALYSIS | FUTURE_SCOPE | PRD | HANDOFF
+model ProductArtifact {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, type])
+  @@index([productId])
 }
 
 model ProductAnalysis {
