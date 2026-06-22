@@ -1,0 +1,120 @@
+// Prisma schema for Startup Digest
+// Local dev: PostgreSQL. Production: Supabase Postgres.
+// DATABASE_URL switches between them via env.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Pooled connection for the app (Supabase: append ?pgbouncer=true&connection_limit=1).
+  url      = env("DATABASE_URL")
+  // Direct (non-pooled) connection for migrations. Falls back to DATABASE_URL locally.
+  directUrl = env("DIRECT_URL")
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  productHuntId  String   @unique
+  name           String
+  tagline        String
+  description    String?
+  websiteUrl     String?
+  productHuntUrl String
+  thumbnailUrl   String?
+  upvotes        Int      @default(0)
+  topics         Json     @default("[]")
+  launchDate     DateTime
+  // Founder triage state: NEW | SAVED | BUILDING | PASSED
+  status         String   @default("NEW")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  analysis  ProductAnalysis?
+  buildPlan BuildPlan?
+
+  @@index([launchDate])
+  @@index([upvotes])
+  @@index([status])
+}
+
+model ProductAnalysis {
+  id              String   @id @default(cuid())
+  productId       String   @unique
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  summary         String
+  whyInteresting  String
+  weaknesses      Json     @default("[]")
+  cloneScore      Int
+  buildDifficulty Int
+  mvpTime         String
+  betterVersions  Json     @default("[]")
+  nicheVersions   Json     @default("[]")
+  germanyVersion  String
+  aiVersion       String
+  founderTake     String
+  worthBuilding   Boolean
+  recommendation  String
+  // 1-10 signals that feed the opportunity score (demand pull, ability to charge).
+  demandSignal          Int @default(5)
+  monetizationPotential Int @default(5)
+  // Composite 0-100 ranking computed deterministically from the scores above.
+  opportunityScore Int     @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([worthBuilding])
+  @@index([cloneScore])
+  @@index([opportunityScore])
+}
+
+model BuildPlan {
+  id                String   @id @default(cuid())
+  productId         String   @unique
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  overview          String
+  targetNiche       String
+  differentiation   Json     @default("[]")
+  coreFeatures      Json     @default("[]")
+  techStack         Json     @default("[]")
+  milestones        Json     @default("[]")
+  firstSteps        Json     @default("[]")
+  risks             Json     @default("[]")
+  monetization      String
+  estimatedTimeline String
+  // Founder's live progress on this plan (arrays of completed item indexes) + scratch notes.
+  completedMilestones Json   @default("[]")
+  completedFirstSteps Json   @default("[]")
+  notes               String @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Single-user founder profile (one row). Personalizes analysis + build plans.
+model FounderProfile {
+  id             String   @id @default("default")
+  skills         Json     @default("[]")
+  preferredStack Json     @default("[]")
+  interests      Json     @default("[]")
+  antiInterests  Json     @default("[]")
+  weeklyHours    Int      @default(10)
+  currentFocus   String   @default("")
+  updatedAt      DateTime @updatedAt
+}
+
+model WeeklyDigest {
+  id               String    @id @default(cuid())
+  weekStartDate    DateTime
+  weekEndDate      DateTime
+  title            String
+  summary          String
+  topWorthBuilding Json      @default("[]")
+  topNicheIdeas    Json      @default("[]")
+  topAiIdeas       Json      @default("[]")
+  easyBuildIdeas   Json      @default("[]")
+  emailSentAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([createdAt])
+}
