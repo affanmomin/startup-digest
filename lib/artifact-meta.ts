@@ -23,11 +23,11 @@ export const ARTIFACT_META: Record<
   },
   PRD: {
     label: "PRD",
-    short: "A complete product requirements doc you can build from.",
+    short: "A product requirements doc — the what & why, no tech.",
   },
   HANDOFF: {
     label: "Claude Code Handoff",
-    short: "A paste-ready brief + kickoff prompt to start building.",
+    short: "A product brief + kickoff prompt that has Claude Code interview you, then build in your stack.",
   },
 };
 

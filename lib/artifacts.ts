@@ -14,15 +14,16 @@ const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_ARTIFACT_MODEL = "anthropic/claude-sonnet-4.6";
 
 const SHARED_RULES = `
-QUALITY BAR — this must read like a sharp operator wrote it after actually studying the product, not a generic template:
+QUALITY BAR — this must read like a sharp product thinker wrote it after actually studying the product, not a generic template:
+- This is a PRODUCT document. Focus entirely on the WHAT and WHY — users, jobs-to-be-done, value, behavior, market, positioning, pricing. Make it about the product and its users.
+- DO NOT include any technical implementation: no tech stack, frameworks, languages, databases, schemas, architecture, code, APIs, or "effort in days". The founder will choose their own stack and build with an AI coding agent. Keep everything 100% implementation-agnostic.
 - Be SPECIFIC to THIS product. Reference its real features, positioning, and category by name. Never write filler that could apply to any product.
-- Use the provided website content and analysis as evidence. Quote or cite concrete details from them.
-- Quantify wherever possible (market size logic, pricing $, timeframes, effort in days/weeks, conversion assumptions).
-- Name real comparable products/competitors and real tools/services where relevant.
-- Show reasoning: explain WHY, surface tradeoffs, call out assumptions and how you'd validate them.
-- Prefer concrete examples, sample copy, sample data, and worked specifics over abstract advice.
-- Depth over length, but do not be terse — be thorough. Use tables and lists where they add clarity.
-- Never hedge with vague phrases ("it depends", "various features", "robust solution"). Commit to specifics.
+- Use the provided website content and analysis as evidence; cite concrete details from them.
+- Quantify where it aids PRODUCT decisions (market logic, pricing $, target metrics, conversion assumptions, rough timeframes) — never engineering effort.
+- Name real comparable products/competitors where relevant.
+- Show reasoning: explain WHY, surface tradeoffs, state assumptions and how you'd validate them.
+- Prefer concrete examples, sample copy, and worked specifics over abstract advice. Use tables and lists where they add clarity.
+- Never hedge with vague phrases ("it depends", "various features", "robust solution"). Commit to specifics. Depth over length, but be thorough.
 Return GitHub-flavored Markdown only — no preamble, no surrounding code fence around the whole document.`;
 
 const SYSTEM_PROMPTS: Record<ArtifactType, string> = {
@@ -39,11 +40,11 @@ Write a RICH, evidence-grounded GAP ANALYSIS. Structure (use these sections, exp
 ### Underserved segments (who is poorly served, and why)
 For each: the segment, their specific unmet need, why incumbents ignore them, and rough size/willingness-to-pay.
 
-### Feature & capability gaps
-A table: | Gap | User pain it leaves | Evidence | How hard to close (1-5) |. At least 5 rows, specific to this product.
+### Feature & experience gaps
+A table: | Gap | User pain it leaves | Evidence | Opportunity size (S/M/L) |. At least 5 rows, specific to this product. Keep gaps at the product/capability level, not technical.
 
 ### UX & workflow gaps
-Concrete friction points in the real product experience (onboarding, time-to-value, integrations, mobile, etc.).
+Concrete friction points in the real product experience (onboarding, time-to-value, clarity, mobile, etc.).
 
 ### Positioning, pricing & GTM gaps
 Where the offer/price/positioning leaves a segment open. Include the original's likely pricing and where a wedge exists.
@@ -52,36 +53,36 @@ Where the offer/price/positioning leaves a segment open. Include the original's 
 The single sharpest, most winnable gap for a solo founder — with a crisp thesis, the target user, and why it's defensible enough to matter.
 ${SHARED_RULES}`,
 
-  FUTURE_SCOPE: `You are a pragmatic founder-operator who has shipped many solo MVPs. Write a RICH, realistic future scope / roadmap for the founder's sharper version of this product.
+  FUTURE_SCOPE: `You are a pragmatic product founder. Write a RICH, realistic product roadmap / future scope for the founder's sharper version of this product. Focus on CAPABILITIES and VALUE, not implementation.
 
-Structure (expand each substantially, be concrete and time-bound):
+Structure (expand each substantially, be concrete):
 
 ## Future Scope: <your version>
 **Vision (12-18 months):** the ambitious-but-grounded destination, in 2-3 sentences.
 **Strategy in one line:** the wedge → expansion path.
 
-### Now — MVP (target: <realistic weeks>)
-The smallest scope that delivers real value. A table: | Capability | Why it's in the MVP | Effort (days) |. Include the ONE metric that proves the MVP works.
+### Now — MVP (rough timeframe)
+The smallest set of capabilities that delivers real value. A table: | Capability | The user value it delivers | Priority |. Include the ONE metric that proves the MVP works.
 
-### Next (weeks ~4–12)
-What you add once people use it, and the signal from "Now" that unlocks each item.
+### Next (the months after launch)
+Capabilities to add once people use it — each tied to the usage signal that unlocks it.
 
-### Later (the 6–18 month bet)
-Where it goes if it works — platform/expansion moves, new segments, moats that compound.
+### Later (the 12-18 month bet)
+Where it goes if it works — new segments, expansion, moats that compound.
 
 ### Explicitly NOT doing (and why)
-Scope you deliberately cut. This section is as important as the rest.
+Scope you deliberately cut. As important as the rest.
 
 ### Sequencing logic & riskiest assumptions
 Why this order. Then a table: | Assumption | Why it's risky | Cheapest test | Kill criteria |.
 
 ### Monetization evolution
-How pricing/packaging changes across Now → Next → Later, with concrete price points.
+How pricing/packaging changes across Now → Next → Later, with concrete price points and who pays.
 ${SHARED_RULES}`,
 
-  PRD: `You are a senior PM at a top product company writing a complete, build-ready PRD for the founder's sharper version of this product. It will be handed to engineers and an AI coding agent, so it must be precise and unambiguous.
+  PRD: `You are a senior PM at a top product company writing a complete, product-focused PRD for the founder's sharper version of this product. It describes WHAT to build and WHY — the founder's coding agent will handle the how.
 
-Structure (be thorough — this is a real PRD, not a sketch):
+Structure (be thorough — a real PRD, but implementation-agnostic):
 
 # PRD: <product name>
 ## 1. Overview & problem statement
@@ -93,40 +94,39 @@ Measurable goals, explicit non-goals, and the north-star + supporting metrics wi
 ## 4. User stories & jobs-to-be-done
 Grouped by epic. "As a <persona>, I want <capability>, so that <outcome>." Cover the full MVP.
 ## 5. Functional requirements
-Numbered (FR-1, FR-2…), specific, testable, with acceptance criteria for each. This is the heart — be exhaustive for the MVP.
-## 6. Detailed feature specs
-For the 3-4 core features: behavior, edge cases, empty/error states, and key UI elements.
-## 7. Data model
-A markdown table per entity (field, type, notes) + relationships. Build-ready.
-## 8. Non-functional requirements
-Performance budgets, auth/permissions, privacy/compliance, reliability — concrete targets.
-## 9. Out of scope (v1) & open questions
-## 10. Rollout & first-week success criteria
+Numbered (FR-1, FR-2…), specific and testable, each with acceptance criteria — described as PRODUCT BEHAVIOR (what the user experiences), never as technical implementation. This is the heart — be exhaustive for the MVP.
+## 6. Core feature behavior
+For the 3-4 core features: the experience, key screens/states, edge cases, and empty/error states from the USER's perspective.
+## 7. Core concepts (domain)
+The key things that exist in the product and how they relate, in plain language (e.g. "a Workspace contains Projects; each Project has Members"). No schemas, no field types.
+## 8. Out of scope (v1) & open questions
+## 9. Rollout & first-week success criteria
 ${SHARED_RULES}`,
 
-  HANDOFF: `You are a staff engineer writing a build handoff to give directly to Claude Code (an AI coding agent) so a solo founder can start building TODAY. It must be concrete enough that an agent can execute it with minimal back-and-forth.
+  HANDOFF: `You are a product lead writing a BUILD BRIEF that a solo founder will paste into Claude Code (an AI coding agent) to build this product. You do NOT choose a tech stack or write any architecture — the founder has their own preferred stack. Your job is to give crystal-clear PRODUCT context and to instruct the coding agent to INTERVIEW the founder, gain clarity, and derive the technical spec WITH them.
 
 Structure:
 
-# Build Handoff: <product>
+# Build Brief: <product>
 ## What we're building & for whom
 2-3 sentences + the precise target niche and the core value loop.
-## Recommended stack (with rationale)
-A table: | Layer | Choice | Why |. Default to Next.js App Router + TypeScript, Tailwind + shadcn/ui, Prisma + Postgres (Supabase), Vercel — and justify each, adding others (auth, payments, queues, AI APIs) only where this product needs them.
-## Architecture
-Modules/services, data flow, and any external integrations. A short diagram in a fenced code block (ASCII) is welcome.
-## Data model
-The full set of Prisma models to create, in a \`\`\`prisma fenced block.
-## Core flows
-Step-by-step for the 2-3 critical user flows (e.g. signup → first value), referencing the routes/components involved.
-## Build sequence (milestones)
-Numbered, each independently shippable and verifiable, with what "done" looks like for each.
-## First tasks (literal day-1 steps)
-The exact first 5-8 commands/steps to scaffold and get something rendering.
-## Kickoff prompt
-A single \`\`\` fenced code block containing a complete, self-contained prompt the founder pastes into Claude Code to begin — including product context, the chosen stack, conventions, and the first milestone with acceptance criteria. Make it genuinely ready to paste.
-## Risks & gotchas for the agent
-Specific things likely to trip up an AI agent on THIS build.
+## Core features (MVP)
+The must-have capabilities, each as a user outcome (what the user can do). No technical detail.
+## Out of scope (v1)
+## Success criteria
+What "working" looks like — the key user behavior / metric.
+## Open product questions
+The product decisions still genuinely undecided, so the agent knows to surface them.
+
+## Kickoff prompt for Claude Code
+A single fenced code block the founder pastes into Claude Code. Write it so that, when pasted, it instructs the agent to:
+1. Take on building this product — embed the full product context above so the prompt is self-contained.
+2. BEFORE writing any code, INTERVIEW the founder to gain clarity and lock the spec. It should ask focused clarifying questions, a few at a time (not all at once), covering at minimum: the founder's preferred tech stack & tools, hosting/deployment, v1 scope & priorities, design/brand direction, must-have integrations, auth & data needs, budget & timeline, and anything ambiguous in this brief. It should keep asking until it has enough to build confidently.
+3. Use the founder's answers — ESPECIALLY their preferred stack — to write a short technical spec and confirm it with the founder before coding.
+4. Then build incrementally, milestone by milestone, showing progress and checking in at each step.
+Make the kickoff prompt genuinely ready to paste, encouraging, and completely stack-agnostic (never assume a stack — the agent must ask).
+
+Keep the ENTIRE document product-focused and implementation-agnostic — no recommended stack, no architecture, no schema, no code.
 ${SHARED_RULES}`,
 };
 
@@ -179,7 +179,6 @@ async function buildContext(
       `# CHOSEN DIRECTION (from the build plan)`,
       `Target niche: ${buildPlan.targetNiche}`,
       `Differentiation: ${asStringArray(buildPlan.differentiation).join("; ")}`,
-      `Planned stack: ${asStringArray(buildPlan.techStack).join(", ")}`,
       `Monetization: ${buildPlan.monetization}`
     );
   }
