@@ -23,7 +23,8 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except: the login page, the API routes (CRON_SECRET-gated),
-  // Next internals, and static/asset files.
-  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico).*)"],
+  // Gate every app page + server action, EXCEPT: the login page, API routes
+  // (CRON_SECRET-gated), Next internals, and any static asset (anything with a
+  // file extension — icon.svg, favicon.ico, robots.txt, images, etc.).
+  matcher: ["/((?!login|api|_next/static|_next/image|.*\\..*).*)"],
 };
