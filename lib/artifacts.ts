@@ -2,6 +2,7 @@ import type { Product, ProductAnalysis, BuildPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { asStringArray } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/concurrency";
+import { fetchPageText } from "@/lib/scrape";
 import { getFounderProfile, profilePromptBlock } from "@/lib/founder";
 import { ARTIFACT_TYPES, type ArtifactType } from "@/lib/artifact-meta";
 
@@ -9,146 +10,183 @@ export { ARTIFACT_TYPES, isArtifactType } from "@/lib/artifact-meta";
 export type { ArtifactType } from "@/lib/artifact-meta";
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "openai/gpt-4o-mini";
+// Build Kit docs are deep, on-demand artifacts — use a strong model by default.
+const DEFAULT_ARTIFACT_MODEL = "anthropic/claude-sonnet-4.6";
+
+const SHARED_RULES = `
+QUALITY BAR — this must read like a sharp operator wrote it after actually studying the product, not a generic template:
+- Be SPECIFIC to THIS product. Reference its real features, positioning, and category by name. Never write filler that could apply to any product.
+- Use the provided website content and analysis as evidence. Quote or cite concrete details from them.
+- Quantify wherever possible (market size logic, pricing $, timeframes, effort in days/weeks, conversion assumptions).
+- Name real comparable products/competitors and real tools/services where relevant.
+- Show reasoning: explain WHY, surface tradeoffs, call out assumptions and how you'd validate them.
+- Prefer concrete examples, sample copy, sample data, and worked specifics over abstract advice.
+- Depth over length, but do not be terse — be thorough. Use tables and lists where they add clarity.
+- Never hedge with vague phrases ("it depends", "various features", "robust solution"). Commit to specifics.
+Return GitHub-flavored Markdown only — no preamble, no surrounding code fence around the whole document.`;
 
 const SYSTEM_PROMPTS: Record<ArtifactType, string> = {
-  GAP_ANALYSIS: `You are a sharp product strategist advising a solo founder.
+  GAP_ANALYSIS: `You are a world-class product strategist (think a16z + top PM) writing a gap analysis for a solo founder who wants to build a sharper version of a Product Hunt product.
 
-Write a GAP ANALYSIS for the founder building a sharper version of the given Product Hunt product. Focus on OPPORTUNITY — where the original and the category underserve real users — not just the product's flaws.
-
-Return GitHub-flavored Markdown only (no preamble, no code fences around the whole doc). Use this structure:
+Write a RICH, evidence-grounded GAP ANALYSIS. Structure (use these sections, expand each substantially):
 
 ## Gap Analysis: <product>
-**The space in one line:** ...
+**Category & one-line read:** what space this is in and the honest state of it.
 
-### Underserved segments
-- who is poorly served today, and why
+### What the original actually does well
+3-5 bullets grounded in the real product/website — be fair, this calibrates the gaps.
+
+### Underserved segments (who is poorly served, and why)
+For each: the segment, their specific unmet need, why incumbents ignore them, and rough size/willingness-to-pay.
 
 ### Feature & capability gaps
-- concrete missing capabilities (with the user pain each leaves on the table)
+A table: | Gap | User pain it leaves | Evidence | How hard to close (1-5) |. At least 5 rows, specific to this product.
 
 ### UX & workflow gaps
-- where the experience is clunky / high-friction
+Concrete friction points in the real product experience (onboarding, time-to-value, integrations, mobile, etc.).
 
-### Positioning & pricing gaps
-- mismatches between what's offered and what a segment would pay for
+### Positioning, pricing & GTM gaps
+Where the offer/price/positioning leaves a segment open. Include the original's likely pricing and where a wedge exists.
 
-### The wedge
-2-3 sentences: the single sharpest gap a solo founder should attack first, and why it's winnable.
+### The wedge (your opening)
+The single sharpest, most winnable gap for a solo founder — with a crisp thesis, the target user, and why it's defensible enough to matter.
+${SHARED_RULES}`,
 
-Be specific and realistic. No generic filler. Ground every gap in this product/category.`,
+  FUTURE_SCOPE: `You are a pragmatic founder-operator who has shipped many solo MVPs. Write a RICH, realistic future scope / roadmap for the founder's sharper version of this product.
 
-  FUTURE_SCOPE: `You are a pragmatic solo-founder advisor.
-
-Write a REALISTIC FUTURE SCOPE / ROADMAP for the founder's sharper version of the given product. It must be achievable by ONE engineer. Be honest about time.
-
-Return GitHub-flavored Markdown only. Structure:
+Structure (expand each substantially, be concrete and time-bound):
 
 ## Future Scope: <your version>
-**One-line vision:** ...
+**Vision (12-18 months):** the ambitious-but-grounded destination, in 2-3 sentences.
+**Strategy in one line:** the wedge → expansion path.
 
-### Now (MVP — first launch)
-- the smallest set that delivers real value; include a realistic timeframe
+### Now — MVP (target: <realistic weeks>)
+The smallest scope that delivers real value. A table: | Capability | Why it's in the MVP | Effort (days) |. Include the ONE metric that proves the MVP works.
 
-### Next (post-launch, weeks 4–12)
-- what you add once people use it
+### Next (weeks ~4–12)
+What you add once people use it, and the signal from "Now" that unlocks each item.
 
-### Later (the 12-month bet)
-- where it goes if it works — the ambitious-but-grounded version
+### Later (the 6–18 month bet)
+Where it goes if it works — platform/expansion moves, new segments, moats that compound.
 
-### Explicitly NOT doing
-- scope you are deliberately cutting, and why
+### Explicitly NOT doing (and why)
+Scope you deliberately cut. This section is as important as the rest.
 
-### Riskiest assumption
-- the one thing that must be true for this to work, and how you'd test it cheaply
+### Sequencing logic & riskiest assumptions
+Why this order. Then a table: | Assumption | Why it's risky | Cheapest test | Kill criteria |.
 
-Be concrete and time-bound. No hand-waving.`,
+### Monetization evolution
+How pricing/packaging changes across Now → Next → Later, with concrete price points.
+${SHARED_RULES}`,
 
-  PRD: `You are a senior product manager writing for a solo founder + their AI coding agent.
+  PRD: `You are a senior PM at a top product company writing a complete, build-ready PRD for the founder's sharper version of this product. It will be handed to engineers and an AI coding agent, so it must be precise and unambiguous.
 
-Write a complete but TIGHT Product Requirements Document (PRD) for the founder's sharper version of the given product. It should be detailed enough to build from, not bloated.
-
-Return GitHub-flavored Markdown only. Structure:
+Structure (be thorough — this is a real PRD, not a sketch):
 
 # PRD: <product name>
-## 1. Problem & opportunity
-## 2. Target user & primary use case
-## 3. Goals & non-goals
-## 4. User stories
-- As a <user>, I want <capability> so that <benefit>  (cover the MVP)
+## 1. Overview & problem statement
+The problem, who has it, why now, and the opportunity (grounded in the gap vs the original).
+## 2. Target users & personas
+1-2 concrete personas with goals, context, and current workarounds.
+## 3. Goals, non-goals & success metrics
+Measurable goals, explicit non-goals, and the north-star + supporting metrics with target numbers.
+## 4. User stories & jobs-to-be-done
+Grouped by epic. "As a <persona>, I want <capability>, so that <outcome>." Cover the full MVP.
 ## 5. Functional requirements
-- numbered, specific, testable
-## 6. Non-functional requirements
-- performance, auth, privacy, reliability — only what matters for an MVP
-## 7. Data model (high level)
-- key entities + important fields
-## 8. Success metrics
-- how you'll know it's working
-## 9. Out of scope (v1)
-## 10. Open questions
+Numbered (FR-1, FR-2…), specific, testable, with acceptance criteria for each. This is the heart — be exhaustive for the MVP.
+## 6. Detailed feature specs
+For the 3-4 core features: behavior, edge cases, empty/error states, and key UI elements.
+## 7. Data model
+A markdown table per entity (field, type, notes) + relationships. Build-ready.
+## 8. Non-functional requirements
+Performance budgets, auth/permissions, privacy/compliance, reliability — concrete targets.
+## 9. Out of scope (v1) & open questions
+## 10. Rollout & first-week success criteria
+${SHARED_RULES}`,
 
-Be specific to THIS product idea and its chosen niche. Realistic for a solo full-stack build.`,
+  HANDOFF: `You are a staff engineer writing a build handoff to give directly to Claude Code (an AI coding agent) so a solo founder can start building TODAY. It must be concrete enough that an agent can execute it with minimal back-and-forth.
 
-  HANDOFF: `You are a staff engineer preparing a build brief to hand to Claude Code (an AI coding agent) so a solo founder can start building immediately.
-
-Write a CLAUDE CODE HANDOFF for the founder's sharper version of the given product. It must be concrete and directly actionable by a coding agent.
-
-Return GitHub-flavored Markdown only. Structure:
+Structure:
 
 # Build Handoff: <product>
-## What we're building
-1-2 sentences + the target niche.
-
-## Recommended stack
-- concrete, solo-friendly choices (default to Next.js App Router + TypeScript, Tailwind + shadcn/ui, Prisma + Postgres, and add others only if needed). Justify briefly.
-
+## What we're building & for whom
+2-3 sentences + the precise target niche and the core value loop.
+## Recommended stack (with rationale)
+A table: | Layer | Choice | Why |. Default to Next.js App Router + TypeScript, Tailwind + shadcn/ui, Prisma + Postgres (Supabase), Vercel — and justify each, adding others (auth, payments, queues, AI APIs) only where this product needs them.
 ## Architecture
-- key modules/services and how they fit (short).
-
+Modules/services, data flow, and any external integrations. A short diagram in a fenced code block (ASCII) is welcome.
 ## Data model
-- the Prisma-style models to create.
-
-## Build sequence
-- numbered milestones an agent can execute end to end, each independently shippable.
-
-## First tasks (do these first)
-- the literal first 3-5 steps to scaffold and get something running.
-
+The full set of Prisma models to create, in a \`\`\`prisma fenced block.
+## Core flows
+Step-by-step for the 2-3 critical user flows (e.g. signup → first value), referencing the routes/components involved.
+## Build sequence (milestones)
+Numbered, each independently shippable and verifiable, with what "done" looks like for each.
+## First tasks (literal day-1 steps)
+The exact first 5-8 commands/steps to scaffold and get something rendering.
 ## Kickoff prompt
-Provide a single fenced code block containing a ready-to-paste prompt the founder can give Claude Code to begin. It should set context, stack, and the first milestone. Make it self-contained.
-
-Be specific to this product and niche. Prefer boring, proven tech.`,
+A single \`\`\` fenced code block containing a complete, self-contained prompt the founder pastes into Claude Code to begin — including product context, the chosen stack, conventions, and the first milestone with acceptance criteria. Make it genuinely ready to paste.
+## Risks & gotchas for the agent
+Specific things likely to trip up an AI agent on THIS build.
+${SHARED_RULES}`,
 };
 
-function userContext(
+async function buildContext(
   product: Product,
   analysis: ProductAnalysis | null,
   buildPlan: BuildPlan | null
-): string {
+): Promise<string> {
   const topics = Array.isArray(product.topics)
     ? (product.topics as unknown[]).filter((t) => typeof t === "string")
     : [];
-  return [
-    `Original product: ${product.name}`,
+
+  // Ground in the REAL product: fetch its website (and Product Hunt page as backup).
+  const siteText = await fetchPageText(product.websiteUrl, 6000);
+  const phText = siteText ? null : await fetchPageText(product.productHuntUrl, 4000);
+  const scraped = siteText ?? phText;
+
+  const lines = [
+    `# ORIGINAL PRODUCT (from Product Hunt)`,
+    `Name: ${product.name}`,
     `Tagline: ${product.tagline}`,
     product.description ? `Description: ${product.description}` : "",
     topics.length ? `Topics: ${topics.join(", ")}` : "",
-    analysis ? `Why interesting: ${analysis.whyInteresting}` : "",
-    analysis ? `Niche angles: ${asStringArray(analysis.nicheVersions).join("; ")}` : "",
-    analysis ? `Better-version ideas: ${asStringArray(analysis.betterVersions).join("; ")}` : "",
-    analysis ? `Founder take: ${analysis.founderTake}` : "",
-    analysis
-      ? `Scores — clone ${analysis.cloneScore}/10, difficulty ${analysis.buildDifficulty}/10, demand ${analysis.demandSignal}/10, monetization ${analysis.monetizationPotential}/10, MVP time ${analysis.mvpTime}.`
-      : "",
-    buildPlan ? `Chosen niche from build plan: ${buildPlan.targetNiche}` : "",
-    buildPlan ? `Differentiation: ${asStringArray(buildPlan.differentiation).join("; ")}` : "",
-    buildPlan ? `Planned tech stack: ${asStringArray(buildPlan.techStack).join(", ")}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `Product Hunt upvotes: ${product.upvotes}`,
+    product.websiteUrl ? `Website: ${product.websiteUrl}` : "",
+    product.productHuntUrl ? `Product Hunt: ${product.productHuntUrl}` : "",
+    "",
+    scraped
+      ? `# LIVE CONTENT SCRAPED FROM THE PRODUCT (use this heavily as ground truth)\n${scraped}`
+      : `# NOTE: could not fetch live site content — reason about the product from the details above.`,
+  ];
+
+  if (analysis) {
+    lines.push(
+      "",
+      `# PRIOR ANALYSIS (a solo-founder lens already applied)`,
+      `Summary: ${analysis.summary}`,
+      `Why interesting: ${analysis.whyInteresting}`,
+      `Weaknesses: ${asStringArray(analysis.weaknesses).join("; ")}`,
+      `Niche angles: ${asStringArray(analysis.nicheVersions).join("; ")}`,
+      `Better-version ideas: ${asStringArray(analysis.betterVersions).join("; ")}`,
+      `AI angle: ${analysis.aiVersion}`,
+      `Founder take: ${analysis.founderTake}`,
+      `Scores — clone ${analysis.cloneScore}/10, build difficulty ${analysis.buildDifficulty}/10, demand ${analysis.demandSignal}/10, monetization ${analysis.monetizationPotential}/10, opportunity ${analysis.opportunityScore}/100, MVP time ${analysis.mvpTime}.`
+    );
+  }
+  if (buildPlan) {
+    lines.push(
+      "",
+      `# CHOSEN DIRECTION (from the build plan)`,
+      `Target niche: ${buildPlan.targetNiche}`,
+      `Differentiation: ${asStringArray(buildPlan.differentiation).join("; ")}`,
+      `Planned stack: ${asStringArray(buildPlan.techStack).join(", ")}`,
+      `Monetization: ${buildPlan.monetization}`
+    );
+  }
+
+  return lines.filter((l) => l !== undefined).join("\n");
 }
 
-/** Strip an accidental wrapping ```markdown fence if the model added one. */
 function cleanMarkdown(raw: string): string {
   let t = raw.trim();
   const fence = t.match(/^```(?:markdown|md)?\s*([\s\S]*?)```$/i);
@@ -157,8 +195,8 @@ function cleanMarkdown(raw: string): string {
 }
 
 /**
- * Generate a single Build Kit artifact (markdown). Returns null on failure
- * (never throws), so callers can surface an error without crashing.
+ * Generate a single Build Kit artifact (rich markdown), grounded in the real
+ * product. Returns null on failure (never throws).
  */
 export async function generateArtifact(
   product: Product,
@@ -171,13 +209,17 @@ export async function generateArtifact(
     console.error("[artifacts] OPENROUTER_API_KEY is not configured.");
     return null;
   }
-  const model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
+  const model =
+    process.env.OPENROUTER_ARTIFACT_MODEL ||
+    process.env.OPENROUTER_MODEL ||
+    DEFAULT_ARTIFACT_MODEL;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   const profileBlock = profilePromptBlock(await getFounderProfile());
   const system = profileBlock
-    ? `${SYSTEM_PROMPTS[type]}\n\n${profileBlock}`
+    ? `${SYSTEM_PROMPTS[type]}\n\n# FOUNDER CONTEXT\n${profileBlock}`
     : SYSTEM_PROMPTS[type];
+  const context = await buildContext(product, analysis, buildPlan);
 
   let content: string;
   try {
@@ -197,18 +239,24 @@ export async function generateArtifact(
             { role: "system", content: system },
             {
               role: "user",
-              content: `Here is the product and its analysis:\n\n${userContext(product, analysis, buildPlan)}`,
+              content: `Produce the document for this product. Use every relevant detail below; be specific and rich.\n\n${context}`,
             },
           ],
-          temperature: 0.7,
+          temperature: 0.6,
+          // Output size governs generation time. Default 2000 (~7-8k chars) fits
+          // Vercel Hobby's 60s cap; raise OPENROUTER_ARTIFACT_MAX_TOKENS to 4000+
+          // locally or on Vercel Pro (300s) for the fullest, richest docs.
+          max_tokens: Number(process.env.OPENROUTER_ARTIFACT_MAX_TOKENS) || 2000,
         }),
         cache: "no-store",
       },
-      20000
+      // Connection guard only; real generation length is bounded by max_tokens
+      // and the function's maxDuration.
+      60000
     );
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      console.error(`[artifacts] OpenRouter ${res.status}: ${text.slice(0, 200)}`);
+      console.error(`[artifacts] OpenRouter ${res.status}: ${text.slice(0, 300)}`);
       return null;
     }
     const data = (await res.json()) as {

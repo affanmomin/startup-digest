@@ -7,11 +7,7 @@ import { fetchLatestProducts, saveProducts } from "@/lib/producthunt";
 import { analyzeAndSaveProduct } from "@/lib/ai";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { generateAndSaveBuildPlan } from "@/lib/buildplan";
-import {
-  generateAndSaveArtifact,
-  ARTIFACT_TYPES,
-  isArtifactType,
-} from "@/lib/artifacts";
+import { generateAndSaveArtifact, isArtifactType } from "@/lib/artifacts";
 import { generateWeeklyDigest } from "@/lib/digest";
 import { sendDigestEmail } from "@/lib/email";
 import { saveFounderProfile } from "@/lib/founder";
@@ -206,31 +202,6 @@ export async function generateArtifactAction(
     return {
       ok: false,
       message: err instanceof Error ? err.message : "Generation failed.",
-    };
-  }
-}
-
-/** Generate the entire Build Kit (all artifact types) for a product. */
-export async function generateAllArtifactsAction(
-  productId: string
-): Promise<ActionResult> {
-  try {
-    const results = await mapWithConcurrency(
-      [...ARTIFACT_TYPES],
-      4,
-      (type) => generateAndSaveArtifact(productId, type)
-    );
-    const ok = results.filter(Boolean).length;
-    revalidatePath(`/products/${productId}`);
-    if (ok === 0) return { ok: false, message: "Could not generate the kit." };
-    return {
-      ok: true,
-      message: `Generated ${ok}/${ARTIFACT_TYPES.length} documents.`,
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Kit generation failed.",
     };
   }
 }

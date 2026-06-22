@@ -23,10 +23,7 @@ import {
   ARTIFACT_META,
   type ArtifactType,
 } from "@/lib/artifact-meta";
-import {
-  generateArtifactAction,
-  generateAllArtifactsAction,
-} from "@/app/actions";
+import { generateArtifactAction } from "@/app/actions";
 
 export interface KitArtifact {
   type: string;
@@ -103,9 +100,15 @@ export function BuildKit({
   async function genAll() {
     setBusy("ALL");
     setError(null);
-    const res = await generateAllArtifactsAction(productId);
-    if (!res.ok) setError(res.message);
-    else router.refresh();
+    // Fire each doc as its own request so each gets a full function budget
+    // (avoids one server action having to finish all 4 within 60s).
+    const results = await Promise.all(
+      ARTIFACT_TYPES.map((t) => generateArtifactAction(productId, t))
+    );
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed === ARTIFACT_TYPES.length) setError("Could not generate the kit.");
+    else if (failed > 0) setError(`${ARTIFACT_TYPES.length - failed}/${ARTIFACT_TYPES.length} generated — retry for the rest.`);
+    router.refresh();
     setBusy(null);
   }
 
